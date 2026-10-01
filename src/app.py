@@ -22,6 +22,8 @@ class PuzzleApp:
 
         self.moves = 0
         self.hints_left = 3
+        self.selected_tile = None
+        self.input_locked = False
 
         self.create_widgets()
 
@@ -92,6 +94,17 @@ class PuzzleApp:
         )
         self.puzzle_label.pack()
 
+        self.puzzle_label.bind("<Button-1>", self.handle_left_click)
+        self.puzzle_label.bind("<Button-3>", self.handle_right_click)
+        self.puzzle_label.bind("<Shift-Button-1>", self.handle_shift_left_click)
+
+        help_label = ttk.Label(
+            right_frame,
+            text="Left click: select/swap | Right click: rotate | Shift + left click: flip",
+            font=("Arial", 9)
+        )
+        help_label.pack(pady=5)
+
         button_frame = ttk.Frame(self.root)
         button_frame.pack(pady=10)
 
@@ -133,6 +146,8 @@ class PuzzleApp:
 
         self.moves = 0
         self.hints_left = 3
+        self.selected_tile = None
+        self.input_locked = False
 
         self.display_images()
         self.hint_button.config(state=tk.NORMAL)
@@ -146,16 +161,180 @@ class PuzzleApp:
             self.puzzle_board.tiles,
             self.puzzle_board.grid_size
         )
+
         puzzle_image = self.image_processor.draw_grid(
             puzzle_image,
             self.puzzle_board.grid_size
         )
+
+        puzzle_image = self.draw_selected_tile(puzzle_image)
+        puzzle_image = self.draw_correct_ticks(puzzle_image)
 
         self.original_tk_image = ImageTk.PhotoImage(self.original_image)
         self.puzzle_tk_image = ImageTk.PhotoImage(puzzle_image)
 
         self.original_label.config(image=self.original_tk_image, text="")
         self.puzzle_label.config(image=self.puzzle_tk_image, text="")
+
+    def draw_selected_tile(self, image):
+        if self.selected_tile is None or self.puzzle_board is None:
+            return image
+
+        image = image.copy()
+        row, col = self.selected_tile
+
+        tile_width = image.width // self.puzzle_board.grid_size
+        tile_height = image.height // self.puzzle_board.grid_size
+
+        left = col * tile_width
+        top = row * tile_height
+        right = left + tile_width
+        bottom = top + tile_height
+
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            (left + 2, top + 2, right - 2, bottom - 2),
+            outline=(255, 0, 0),
+            width=4
+        )
+
+        return image
+
+    def draw_correct_ticks(self, image):
+        if self.puzzle_board is None:
+            return image
+
+        image = image.copy()
+
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(image)
+
+        grid = self.puzzle_board.grid_size
+        tile_width = image.width // grid
+        tile_height = image.height // grid
+
+        for row in range(grid):
+            for col in range(grid):
+                tile = self.puzzle_board.tiles[row][col]
+
+                if tile.is_correct():
+                    x = col * tile_width
+                    y = row * tile_height
+
+                    draw.line(
+                        (x + 8, y + 18, x + 18, y + 28),
+                        fill=(0, 180, 0),
+                        width=4
+                    )
+                    draw.line(
+                        (x + 18, y + 28, x + 34, y + 8),
+                        fill=(0, 180, 0),
+                        width=4
+                    )
+
+        return image
+
+    def get_clicked_tile_position(self, event):
+        if self.puzzle_board is None or self.original_image is None:
+            return None
+
+        grid = self.puzzle_board.grid_size
+
+        image_width = self.original_image.width
+        image_height = self.original_image.height
+
+        if event.x < 0 or event.y < 0:
+            return None
+
+        if event.x >= image_width or event.y >= image_height:
+            return None
+
+        tile_width = image_width // grid
+        tile_height = image_height // grid
+
+        col = event.x // tile_width
+        row = event.y // tile_height
+
+        if row >= grid or col >= grid:
+            return None
+
+        return row, col
+
+    def handle_left_click(self, event):
+        if self.input_locked or self.puzzle_board is None:
+            return
+
+        position = self.get_clicked_tile_position(event)
+
+        if position is None:
+            return
+
+        if self.selected_tile is None:
+            self.selected_tile = position
+            self.display_images()
+            return
+
+        if self.selected_tile == position:
+            self.selected_tile = None
+            self.display_images()
+            return
+
+        row1, col1 = self.selected_tile
+        row2, col2 = position
+
+        self.puzzle_board.swap_tiles(row1, col1, row2, col2)
+
+        self.selected_tile = None
+        self.moves += 1
+
+        self.after_player_move()
+
+    def handle_right_click(self, event):
+        if self.input_locked or self.puzzle_board is None:
+            return
+
+        position = self.get_clicked_tile_position(event)
+
+        if position is None:
+            return
+
+        row, col = position
+        self.puzzle_board.rotate_tile(row, col)
+
+        self.selected_tile = None
+        self.moves += 1
+
+        self.after_player_move()
+
+    def handle_shift_left_click(self, event):
+        if self.input_locked or self.puzzle_board is None:
+            return
+
+        position = self.get_clicked_tile_position(event)
+
+        if position is None:
+            return
+
+        row, col = position
+        self.puzzle_board.flip_tile(row, col)
+
+        self.selected_tile = None
+        self.moves += 1
+
+        self.after_player_move()
+
+    def after_player_move(self):
+        self.display_images()
+        self.update_status()
+
+        if self.puzzle_board.is_solved():
+            self.input_locked = True
+            self.hint_button.config(state=tk.DISABLED)
+            messagebox.showinfo(
+                "Puzzle complete",
+                f"Congratulations! You solved the puzzle in {self.moves} moves."
+            )
 
     def update_status(self):
         if self.puzzle_board is None:
@@ -168,7 +347,7 @@ class PuzzleApp:
         )
 
     def use_hint(self):
-        if self.puzzle_board is None:
+        if self.puzzle_board is None or self.input_locked:
             return
 
         if self.hints_left <= 0:
@@ -189,9 +368,11 @@ class PuzzleApp:
         self.puzzle_board.solve()
         self.moves = 0
         self.hints_left = 3
+        self.selected_tile = None
+        self.input_locked = True
 
         self.display_images()
-        self.hint_button.config(state=tk.NORMAL)
+        self.hint_button.config(state=tk.DISABLED)
         self.update_status()
 
         messagebox.showinfo("Puzzle solved", "The puzzle has been solved.")
