@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 
 from src.image_processor import ImageProcessor
 from src.puzzle import PuzzleBoard
@@ -23,6 +23,7 @@ class PuzzleApp:
         self.moves = 0
         self.hints_left = 3
         self.selected_tile = None
+        self.hint_tile = None
         self.input_locked = False
 
         self.create_widgets()
@@ -147,6 +148,7 @@ class PuzzleApp:
         self.moves = 0
         self.hints_left = 3
         self.selected_tile = None
+        self.hint_tile = None
         self.input_locked = False
 
         self.display_images()
@@ -156,6 +158,8 @@ class PuzzleApp:
     def display_images(self):
         if self.original_image is None or self.puzzle_board is None:
             return
+
+        original_display = self.original_image.copy()
 
         puzzle_image = self.image_processor.reassemble_tiles(
             self.puzzle_board.tiles,
@@ -170,7 +174,12 @@ class PuzzleApp:
         puzzle_image = self.draw_selected_tile(puzzle_image)
         puzzle_image = self.draw_correct_ticks(puzzle_image)
 
-        self.original_tk_image = ImageTk.PhotoImage(self.original_image)
+        original_display, puzzle_image = self.draw_hint_circles(
+            original_display,
+            puzzle_image
+        )
+
+        self.original_tk_image = ImageTk.PhotoImage(original_display)
         self.puzzle_tk_image = ImageTk.PhotoImage(puzzle_image)
 
         self.original_label.config(image=self.original_tk_image, text="")
@@ -191,7 +200,6 @@ class PuzzleApp:
         right = left + tile_width
         bottom = top + tile_height
 
-        from PIL import ImageDraw
         draw = ImageDraw.Draw(image)
         draw.rectangle(
             (left + 2, top + 2, right - 2, bottom - 2),
@@ -206,8 +214,6 @@ class PuzzleApp:
             return image
 
         image = image.copy()
-
-        from PIL import ImageDraw
         draw = ImageDraw.Draw(image)
 
         grid = self.puzzle_board.grid_size
@@ -234,6 +240,57 @@ class PuzzleApp:
                     )
 
         return image
+
+    def draw_hint_circles(self, original_image, puzzle_image):
+        if self.hint_tile is None or self.puzzle_board is None:
+            return original_image, puzzle_image
+
+        current_row, current_col = self.hint_tile
+        tile = self.puzzle_board.tiles[current_row][current_col]
+
+        grid = self.puzzle_board.grid_size
+
+        original_tile_width = original_image.width // grid
+        original_tile_height = original_image.height // grid
+
+        puzzle_tile_width = puzzle_image.width // grid
+        puzzle_tile_height = puzzle_image.height // grid
+
+        original_center_x = tile.original_col * original_tile_width + original_tile_width // 2
+        original_center_y = tile.original_row * original_tile_height + original_tile_height // 2
+
+        puzzle_center_x = current_col * puzzle_tile_width + puzzle_tile_width // 2
+        puzzle_center_y = current_row * puzzle_tile_height + puzzle_tile_height // 2
+
+        original_draw = ImageDraw.Draw(original_image)
+        puzzle_draw = ImageDraw.Draw(puzzle_image)
+
+        radius = 24
+        blue = (0, 90, 255)
+
+        original_draw.ellipse(
+            (
+                original_center_x - radius,
+                original_center_y - radius,
+                original_center_x + radius,
+                original_center_y + radius
+            ),
+            outline=blue,
+            width=5
+        )
+
+        puzzle_draw.ellipse(
+            (
+                puzzle_center_x - radius,
+                puzzle_center_y - radius,
+                puzzle_center_x + radius,
+                puzzle_center_y + radius
+            ),
+            outline=blue,
+            width=5
+        )
+
+        return original_image, puzzle_image
 
     def get_clicked_tile_position(self, event):
         if self.puzzle_board is None or self.original_image is None:
@@ -325,6 +382,8 @@ class PuzzleApp:
         self.after_player_move()
 
     def after_player_move(self):
+        self.hint_tile = None
+
         self.display_images()
         self.update_status()
 
@@ -354,11 +413,27 @@ class PuzzleApp:
             self.hint_button.config(state=tk.DISABLED)
             return
 
+        incorrect_positions = []
+
+        grid = self.puzzle_board.grid_size
+
+        for row in range(grid):
+            for col in range(grid):
+                tile = self.puzzle_board.tiles[row][col]
+
+                if not tile.is_correct():
+                    incorrect_positions.append((row, col))
+
+        if not incorrect_positions:
+            return
+
+        self.hint_tile = incorrect_positions[0]
         self.hints_left -= 1
 
         if self.hints_left == 0:
             self.hint_button.config(state=tk.DISABLED)
 
+        self.display_images()
         self.update_status()
 
     def solve_puzzle(self):
@@ -369,6 +444,7 @@ class PuzzleApp:
         self.moves = 0
         self.hints_left = 3
         self.selected_tile = None
+        self.hint_tile = None
         self.input_locked = True
 
         self.display_images()
