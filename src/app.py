@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
 
+from src.image_processor import ImageProcessor
+
 
 class PuzzleApp:
     def __init__(self):
@@ -9,7 +11,10 @@ class PuzzleApp:
         self.root.title("HIT137 Image Puzzle")
         self.root.geometry("1200x750")
 
+        self.image_processor = ImageProcessor()
+
         self.original_image = None
+        self.puzzle_image = None
         self.original_tk_image = None
         self.puzzle_tk_image = None
 
@@ -114,35 +119,27 @@ class PuzzleApp:
         if not file_path:
             return
 
-        image = Image.open(file_path).convert("RGB")
-        image = self.resize_for_display(image)
+        grid = self.grid_size.get()
 
-        self.original_image = image
+        image = Image.open(file_path)
+        prepared_image = self.image_processor.prepare_image(image, grid)
+
+        self.original_image = prepared_image
+        self.puzzle_image = self.image_processor.draw_grid(prepared_image, grid)
 
         self.moves = 0
         self.hints_left = 3
 
-        self.original_tk_image = ImageTk.PhotoImage(image)
-        self.puzzle_tk_image = ImageTk.PhotoImage(image)
-
-        self.original_label.config(image=self.original_tk_image, text="")
-        self.puzzle_label.config(image=self.puzzle_tk_image, text="")
-
+        self.display_images()
         self.hint_button.config(state=tk.NORMAL)
         self.update_status()
 
-    def resize_for_display(self, image):
-        max_size = 500
-        width, height = image.size
+    def display_images(self):
+        self.original_tk_image = ImageTk.PhotoImage(self.original_image)
+        self.puzzle_tk_image = ImageTk.PhotoImage(self.puzzle_image)
 
-        if width > height:
-            new_width = max_size
-            new_height = int(height * max_size / width)
-        else:
-            new_height = max_size
-            new_width = int(width * max_size / height)
-
-        return image.resize((new_width, new_height))
+        self.original_label.config(image=self.original_tk_image, text="")
+        self.puzzle_label.config(image=self.puzzle_tk_image, text="")
 
     def update_status(self):
         grid = self.grid_size.get()
@@ -174,8 +171,10 @@ class PuzzleApp:
         self.moves = 0
         self.hints_left = 3
 
-        self.puzzle_tk_image = ImageTk.PhotoImage(self.original_image)
-        self.puzzle_label.config(image=self.puzzle_tk_image, text="")
+        grid = self.grid_size.get()
+        self.puzzle_image = self.image_processor.draw_grid(self.original_image, grid)
+
+        self.display_images()
 
         self.hint_button.config(state=tk.NORMAL)
         self.update_status()
