@@ -13,6 +13,9 @@ class PuzzleApp:
         self.original_tk_image = None
         self.puzzle_tk_image = None
 
+        self.moves = 0
+        self.hints_left = 3
+
         self.create_widgets()
 
     def create_widgets(self):
@@ -82,6 +85,23 @@ class PuzzleApp:
         )
         self.puzzle_label.pack()
 
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(pady=10)
+
+        self.hint_button = ttk.Button(
+            button_frame,
+            text="Hint",
+            command=self.use_hint
+        )
+        self.hint_button.pack(side=tk.LEFT, padx=10)
+
+        self.solve_button = ttk.Button(
+            button_frame,
+            text="Solve",
+            command=self.solve_puzzle
+        )
+        self.solve_button.pack(side=tk.LEFT, padx=10)
+
     def load_image(self):
         file_path = filedialog.askopenfilename(
             title="Choose an image",
@@ -99,18 +119,17 @@ class PuzzleApp:
 
         self.original_image = image
 
+        self.moves = 0
+        self.hints_left = 3
+
         self.original_tk_image = ImageTk.PhotoImage(image)
         self.puzzle_tk_image = ImageTk.PhotoImage(image)
 
         self.original_label.config(image=self.original_tk_image, text="")
         self.puzzle_label.config(image=self.puzzle_tk_image, text="")
 
-        grid = self.grid_size.get()
-        total_tiles = grid * grid
-
-        self.status_label.config(
-            text=f"Moves: 0 | Incorrect tiles: {total_tiles} | Hints left: 3"
-        )
+        self.hint_button.config(state=tk.NORMAL)
+        self.update_status()
 
     def resize_for_display(self, image):
         max_size = 500
@@ -124,6 +143,42 @@ class PuzzleApp:
             new_width = int(width * max_size / height)
 
         return image.resize((new_width, new_height))
+
+    def update_status(self):
+        grid = self.grid_size.get()
+        total_tiles = grid * grid
+
+        self.status_label.config(
+            text=f"Moves: {self.moves} | Incorrect tiles: {total_tiles} | Hints left: {self.hints_left}"
+        )
+
+    def use_hint(self):
+        if self.original_image is None:
+            return
+
+        if self.hints_left <= 0:
+            self.hint_button.config(state=tk.DISABLED)
+            return
+
+        self.hints_left -= 1
+
+        if self.hints_left == 0:
+            self.hint_button.config(state=tk.DISABLED)
+
+        self.update_status()
+
+    def solve_puzzle(self):
+        if self.original_image is None:
+            return
+
+        self.moves = 0
+        self.hints_left = 3
+
+        self.puzzle_tk_image = ImageTk.PhotoImage(self.original_image)
+        self.puzzle_label.config(image=self.puzzle_tk_image, text="")
+
+        self.hint_button.config(state=tk.NORMAL)
+        self.update_status()
 
     def run(self):
         self.root.mainloop()
