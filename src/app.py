@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 
 from src.image_processor import ImageProcessor
+from src.puzzle import PuzzleBoard
 
 
 class PuzzleApp:
@@ -14,7 +15,8 @@ class PuzzleApp:
         self.image_processor = ImageProcessor()
 
         self.original_image = None
-        self.puzzle_image = None
+        self.puzzle_board = None
+
         self.original_tk_image = None
         self.puzzle_tk_image = None
 
@@ -122,10 +124,12 @@ class PuzzleApp:
         grid = self.grid_size.get()
 
         image = Image.open(file_path)
-        prepared_image = self.image_processor.prepare_image(image, grid)
+        self.original_image = self.image_processor.prepare_image(image, grid)
 
-        self.original_image = prepared_image
-        self.puzzle_image = self.image_processor.draw_grid(prepared_image, grid)
+        tiles = self.image_processor.split_into_tiles(self.original_image, grid)
+
+        self.puzzle_board = PuzzleBoard(tiles, grid)
+        self.puzzle_board.scramble()
 
         self.moves = 0
         self.hints_left = 3
@@ -135,22 +139,36 @@ class PuzzleApp:
         self.update_status()
 
     def display_images(self):
+        if self.original_image is None or self.puzzle_board is None:
+            return
+
+        puzzle_image = self.image_processor.reassemble_tiles(
+            self.puzzle_board.tiles,
+            self.puzzle_board.grid_size
+        )
+        puzzle_image = self.image_processor.draw_grid(
+            puzzle_image,
+            self.puzzle_board.grid_size
+        )
+
         self.original_tk_image = ImageTk.PhotoImage(self.original_image)
-        self.puzzle_tk_image = ImageTk.PhotoImage(self.puzzle_image)
+        self.puzzle_tk_image = ImageTk.PhotoImage(puzzle_image)
 
         self.original_label.config(image=self.original_tk_image, text="")
         self.puzzle_label.config(image=self.puzzle_tk_image, text="")
 
     def update_status(self):
-        grid = self.grid_size.get()
-        total_tiles = grid * grid
+        if self.puzzle_board is None:
+            incorrect_tiles = 0
+        else:
+            incorrect_tiles = self.puzzle_board.count_incorrect_tiles()
 
         self.status_label.config(
-            text=f"Moves: {self.moves} | Incorrect tiles: {total_tiles} | Hints left: {self.hints_left}"
+            text=f"Moves: {self.moves} | Incorrect tiles: {incorrect_tiles} | Hints left: {self.hints_left}"
         )
 
     def use_hint(self):
-        if self.original_image is None:
+        if self.puzzle_board is None:
             return
 
         if self.hints_left <= 0:
@@ -165,19 +183,18 @@ class PuzzleApp:
         self.update_status()
 
     def solve_puzzle(self):
-        if self.original_image is None:
+        if self.puzzle_board is None:
             return
 
+        self.puzzle_board.solve()
         self.moves = 0
         self.hints_left = 3
 
-        grid = self.grid_size.get()
-        self.puzzle_image = self.image_processor.draw_grid(self.original_image, grid)
-
         self.display_images()
-
         self.hint_button.config(state=tk.NORMAL)
         self.update_status()
+
+        messagebox.showinfo("Puzzle solved", "The puzzle has been solved.")
 
     def run(self):
         self.root.mainloop()
