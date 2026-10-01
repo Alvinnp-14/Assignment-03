@@ -1,4 +1,6 @@
-from PIL import Image, ImageDraw
+from PIL import ImageDraw
+
+from src.tile import Tile
 
 
 class ImageProcessor:
@@ -35,6 +37,46 @@ class ImageProcessor:
         bottom = top + new_height
 
         return image.crop((left, top, right, bottom))
+
+    def split_into_tiles(self, image, grid_size):
+        width, height = image.size
+        tile_width = width // grid_size
+        tile_height = height // grid_size
+
+        tiles = []
+
+        for row in range(grid_size):
+            tile_row = []
+
+            for col in range(grid_size):
+                left = col * tile_width
+                top = row * tile_height
+                right = left + tile_width
+                bottom = top + tile_height
+
+                tile_image = image.crop((left, top, right, bottom))
+                tile = Tile(tile_image, row, col)
+
+                tile_row.append(tile)
+
+            tiles.append(tile_row)
+
+        return tiles
+
+    def reassemble_tiles(self, tiles, grid_size):
+        tile_width, tile_height = tiles[0][0].image.size
+
+        result_width = tile_width * grid_size
+        result_height = tile_height * grid_size
+
+        result = tiles[0][0].image.copy().resize((result_width, result_height))
+
+        for row in range(grid_size):
+            for col in range(grid_size):
+                tile = tiles[row][col]
+                result.paste(tile.image, (col * tile_width, row * tile_height))
+
+        return result
 
     def draw_grid(self, image, grid_size):
         image_with_grid = image.copy()
